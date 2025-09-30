@@ -1,6 +1,8 @@
+# ERD: https://drawsql.app/teams/brightwood/diagrams/e-commerce-data 
+
 USE ecommerce;
 
-/* Ceation of sales_report table for import from csv*/
+/* Creation of sales_report table for import from csv*/
 
 DROP TABLE IF EXISTS sales_report;
 
@@ -45,8 +47,37 @@ CREATE TABLE `ecommerce`.`item_stock` (
     PRIMARY KEY (`index`)
 );
 
-/* Creation of international sales table from 
+/* Creation of international sales table from csv */
 
+CREATE TABLE `ecommerce`.`international_sales` (
+  `index` INT NOT NULL,
+  `date` DATE NULL,
+  `customer` VARCHAR(45) NULL,
+  `sku` VARCHAR(45) NULL,
+  `quantity` BIGINT NULL,
+  `converted_price` FLOAT NULL,
+  `charge` FLOAT NULL,
+  PRIMARY KEY (`index`));
+  
+  /* Once again, fixing the date column (removing the 00:00:00 timestamp), plus rejigging the column names and datatypes */
+  
+ALTER TABLE international_sales
+CHANGE COLUMN CUSTOMER customer_name varchar(45);
+
+ALTER TABLE international_sales
+CHANGE COLUMN SKU sku varchar(45);
+
+ALTER TABLE international_sales
+CHANGE COLUMN PCS quantity bigint;
+
+ALTER TABLE international_sales
+CHANGE COLUMN RATE converted_price FLOAT;
+
+ALTER TABLE international_sales
+CHANGE COLUMN `GROSS AMT` charge float;
+  
+ALTER TABLE international_sales
+MODIFY COLUMN date DATE;
 
 /* Stored procedure to look up information on a single order, included product information including stock for refund/replacement requirements */
 
@@ -67,5 +98,35 @@ BEGIN
 END$$
 DELIMITER ;
 
+/* Creation of a stored procedure to provide a brief customer summary using a LIKE name input match, showing the customer name, their total spend,
+their spend this year - which is always 0 as the records don't go back that far -, and the date and sum of their most recent purchase */
 
+DELIMITER $$
+CREATE PROCEDURE customer_summary(in p_customer_name TEXT)
+BEGIN
+	WITH most_recent_purchase AS (
+		SELECT customer_name, MAX(date) AS max_date
+		FROM international_sales
+		GROUP BY customer_name)	#CTE for the most recent purchase
+	SELECT
+    i.customer_name,
+		ROUND(SUM(i.charge), 2) AS total_spend,
+		SUM(CASE WHEN YEAR(i.date) = YEAR(CURDATE()) THEN ROUND(i.charge, 2) ELSE 0 END) AS spend_this_year,
+		MAX(CASE WHEN date = NULL THEN 'No Purchase History' ELSE m.max_date END) AS most_recent_purchase_date,
+		SUM(CASE WHEN i.date = m.max_date THEN ROUND(i.charge, 2) ELSE 0 END) AS most_recent_spend
+	FROM international_sales i
+	JOIN 
+		most_recent_purchase m ON i.customer_name = m.customer_name
+	WHERE i.customer_name LIKE CONCAT('%', p_customer_name, '%')
+	GROUP BY i.customer_name;
+    
+    END $$
+    
+    DELIMITER ;
+    
+    CALL customer_summary('amani');
+
+
+/* IDEAS: Top customer (by year?) / top selling item(by year? Monthly trends?) / Total Revenue by month/year etc. / 
+Best-selling CATEGORIES / Explore customer orders in general: can we predict churn, look at repeat orders etc. */
 
