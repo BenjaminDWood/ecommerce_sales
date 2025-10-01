@@ -170,7 +170,7 @@ ORDER BY overall_rank;
 
 
 /* IDEAS: Top customer (by year?) DONE / top selling item(by year? Monthly trends?) / Total Revenue by month/year etc. / 
-Best-selling CATEGORIES / Explore customer orders in general: can we predict churn, look at repeat orders etc. */
+Best-selling CATEGORIES / Explore customer orders in general: can we predict churn, look at repeat orders etc. / Use ship city to determine the locations with the most orders! */
 
 
-
+ 

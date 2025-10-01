@@ -338,7 +338,43 @@ JOIN
 SELECT
 *
 from
-sales_report;
+sales_report
+WHERE
+status = 'Cancelled';
+
+SELECT * FROM international_sales WHERE quantity = 0;
+
+SELECT DISTINCT status FROM sales_report;
+
+SELECT status, COUNT(status) FROM sales_report GROUP BY status;
+
+SELECT status, COUNT(status) FROM sales_report WHERE status = 'Shipped' OR status = 'Shipped - Delivered to Buyer' GROUP BY status;
+
+SELECT DISTINCT
+	qty
+FROM
+	sales_report;
+    
+SELECT
+*
+FROM
+sales_report
+WHERE
+qty > 1;
+
+SELECT
+*
+FROM
+international_sales
+WHERE
+quantity > 1;
+
+SELECT
+*
+FROM
+international_sales
+WHERE
+sku = 'J0023-TP-M'; #Amount is the total paid, no need to multiply it. Charge is also a total paid field.
     
 SELECT
 	sr.sku,
@@ -353,3 +389,97 @@ JOIN
 GROUP BY sku
 ORDER BY sku DESC;
 
+ALTER TABLE sales_report
+MODIFY COLUMN date DATE;
+
+#Working on the final version for top products - TOP PRODUCTS VERSION 1/10/25 - LEAVING FOR NOW AS I VALUE MY SANITY! MOST RECENT VERSION HERE
+# LOOK I PUT IT IN ALL CAPS SO IT'S EASY TO SEEEEEEE!
+
+WITH all_sales AS (
+	SELECT
+		order_id,
+		date,
+        NULL AS customer_name,
+        sku,
+        qty,
+        amount
+	FROM
+		sales_report
+	WHERE
+		status IN ('Shipped', 'Shipped - Delivered to Buyer')
+/* Cancelled items still appear with qty and amount sometimes, but shouldn't be included in revenue figures (Most (>80%) orders fall within one of these categories,
+other orders may still fall through at this point due to cancellations, loss, returns etc., so have been excluded */
+	UNION ALL
+	SELECT
+		NULL AS order_id,
+		date,
+        customer_name,
+        sku,
+        quantity AS qty,
+        charge AS amount
+	FROM
+		international_sales
+	GROUP BY date, customer_name, sku, quantity, charge
+	),
+combined_sales AS (
+	SELECT
+		MAX(date),
+		sku,
+        SUM(qty) AS total_sold,
+        SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END) AS total_revenue
+	FROM
+		all_sales
+	GROUP BY
+		sku
+	)
+SELECT
+	a.sku,
+	RANK() OVER(PARTITION BY c.total_revenue ORDER BY c.total_revenue DESC) AS total_ranking,
+    c.total_revenue,
+	RANK() OVER(PARTITION BY c.total_sold ORDER BY c.total_sold DESC) AS items_sold_ranking,
+    c.total_sold
+FROM
+	all_sales a
+JOIN
+	combined_sales c ON a.sku = c.sku
+GROUP BY
+	a.sku
+ORDER BY
+	total_ranking;
+
+#Top selling items - The sku code - any kind of name for the item, number sold, total spent on it and rank, avg spent on it - what is meant by this? 
+#                                                       Category?
+        
+SELECT * FROM international_sales;
+
+SELECT * FROM international_sales WHERE quantity IS NOT NULL;
+	 
+SELECT * FROM sales_report 	WHERE status IN ('Shipped', 'Shipped - Delivered to Buyer') AND qty = 0;
+
+
+#Testing CTEs - they work fine
+
+SELECT
+	order_id,
+	date,
+	NULL AS customer_name,
+	sku,
+	qty,
+	amount
+FROM
+	sales_report
+WHERE
+	status IN ('Shipped', 'Shipped - Delivered to Buyer')
+UNION ALL
+SELECT
+	NULL AS order_id,
+	date,
+	customer_name,
+	sku,
+	quantity AS qty,
+	charge AS amount
+FROM
+	international_sales
+GROUP BY date, customer_name, sku, quantity, charge;
+
+SELECT dae
