@@ -126,7 +126,51 @@ BEGIN
     
     CALL customer_summary('amani');
 
+/*Ranking table of the top customers including their overall rank and spend, plus their rank and spend for each of the two years using CTEs
+(NOTE: This is not the way I'd do this were there multiple years, but for two years only it seemed much cleaner and easier to simply have the two CTEs */
 
-/* IDEAS: Top customer (by year?) / top selling item(by year? Monthly trends?) / Total Revenue by month/year etc. / 
+WITH 2021_spend AS (
+	SELECT
+		customer_name,
+        sum(charge) AS yearly_spend
+	FROM
+		international_sales
+	WHERE
+		year(date) = '2021'
+	GROUP BY
+		customer_name
+	), 
+ 2022_spend AS (
+	SELECT
+		customer_name,
+        sum(charge) AS yearly_spend
+	FROM
+		international_sales
+	WHERE
+		year(date) = '2022'
+	GROUP BY
+		customer_name
+	) 
+SELECT
+	RANK() OVER (ORDER BY SUM(i.charge) DESC) AS overall_rank,
+	i.customer_name,
+	ROUND(sum(i.charge), 2) AS total_spend,
+    RANK() OVER (ORDER BY SUM(o.yearly_spend) DESC) AS `Rank (2021)`,
+    o.yearly_spend AS `2021_spend`,
+	RANK() OVER (ORDER BY SUM(t.yearly_spend) DESC) `Rank (2022)`,
+    t.yearly_spend AS `2022_spend`
+FROM
+	international_sales i
+JOIN
+	2021_spend o ON o.customer_name = i.customer_name
+JOIN
+	2022_spend t ON t.customer_name = i.customer_name
+GROUP BY customer_name
+ORDER BY overall_rank;
+
+
+/* IDEAS: Top customer (by year?) DONE / top selling item(by year? Monthly trends?) / Total Revenue by month/year etc. / 
 Best-selling CATEGORIES / Explore customer orders in general: can we predict churn, look at repeat orders etc. */
+
+
 
