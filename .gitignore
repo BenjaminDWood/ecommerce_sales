@@ -1,6 +1,7 @@
-# Other files
+# Other files/folders
 *.csv
 *.docx
+exports/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -655,5 +655,157 @@ FROM
 	international_sales;
     
 SELECT date(now());
+
+# Creating best-selling categories
+
+WITH all_sales AS (
+	SELECT
+		order_id,										#Order ID from sales report
+		date,											#Date from sales report
+        NULL AS customer_name,							#Customer name NULL for international sales
+        category,										#Adding category from sales report
+        qty,											#qty (quantity) from sales report
+        amount											#Amount (spent) from sales report
+	FROM
+		sales_report
+	WHERE
+		status IN ('Shipped', 'Shipped - Delivered to Buyer')
+/* Cancelled items still appear with qty and amount sometimes, but shouldn't be included in revenue figures (Most (>80%) orders fall within one of these categories,
+other orders may still fall through at this point due to cancellations, loss, returns etc., so have been excluded */
+	UNION ALL
+	SELECT
+		NULL AS order_id,								#order id NULL for sales report
+		i.date,											#Date from international sales
+        i.customer_name,									#Customer name from international sales
+        st.category,
+        i.quantity AS qty,								#quantity as qty from international sales
+        i.charge AS amount								#charge (amount spent) from international sales
+	FROM
+		international_sales i
+	JOIN
+		item_stock st ON st.sku_code = i.sku
+	),
+combined_sales AS (										#Aggregate by product (sku) and date
+	SELECT
+		date_format(date, '%Y-%m') AS `date`,
+        category,
+        SUM(qty) AS total_sold,
+        SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END) AS total_revenue
+	FROM
+		all_sales
+	GROUP BY
+		date_format(date, '%Y-%m'), category
+	)
+SELECT
+	date,
+    category,
+	RANK() OVER(PARTITION BY date ORDER BY total_revenue DESC) AS total_ranking,
+    total_revenue,
+	RANK() OVER(PARTITION BY date ORDER BY total_sold DESC) AS items_sold_ranking,
+    total_sold
+FROM
+	combined_sales
+ORDER BY
+	`date` DESC, total_revenue DESC;
     
+    #Top categories overall
+    
+    WITH all_sales AS (
+	SELECT
+		order_id,										#Order ID from sales report
+        NULL AS customer_name,							#Customer name NULL for international sales
+        category,										#Adding category from sales report
+        qty,											#qty (quantity) from sales report
+        amount											#Amount (spent) from sales report
+	FROM
+		sales_report
+	WHERE
+		status IN ('Shipped', 'Shipped - Delivered to Buyer')
+/* Cancelled items still appear with qty and amount sometimes, but shouldn't be included in revenue figures (Most (>80%) orders fall within one of these categories,
+other orders may still fall through at this point due to cancellations, loss, returns etc., so have been excluded */
+	UNION ALL
+	SELECT
+		NULL AS order_id,								#order id NULL for sales report
+        i.customer_name,									#Customer name from international sales
+        st.category,
+        i.quantity AS qty,								#quantity as qty from international sales
+        i.charge AS amount								#charge (amount spent) from international sales
+	FROM
+		international_sales i
+	JOIN
+		item_stock st ON st.sku_code = i.sku
+	),
+combined_sales AS (										#Aggregate by product (sku) and date
+	SELECT
+        category,
+        SUM(qty) AS total_sold,
+        SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END) AS total_revenue
+	FROM
+		all_sales
+	GROUP BY
+		category
+	)
+SELECT
+    category,
+	RANK() OVER(ORDER BY total_revenue DESC) AS total_ranking,
+    total_revenue,
+	RANK() OVER(ORDER BY total_sold DESC) AS items_sold_ranking,
+    total_sold
+FROM
+	combined_sales
+ORDER BY
+	total_revenue DESC;
+    
+#Yes, it was only now that I remembered the existence of temporary tables *SHAME*   
+DROP TABLE t_all_sales;
+CREATE TEMPORARY TABLE t_all_sales
+	SELECT
+		order_id,										#Order ID from sales report
+		date,											#Date from sales report
+        NULL AS customer_name,							#Customer name NULL for international sales
+        sku,											#sku from sales report
+        category,
+        qty,											#qty (quantity) from sales report
+        amount											#Amount (spent) from sales report
+	FROM
+		sales_report
+	WHERE
+		status IN ('Shipped', 'Shipped - Delivered to Buyer')
+	UNION ALL
+	SELECT
+		NULL AS order_id,								#order id NULL for sales report
+		i.date,											#Date from international sales
+        i.customer_name,									#Customer name from international sales
+        i.sku,											#sku from international sales
+        st.category,
+        i.quantity AS qty,								#quantity as qty from international sales
+        i.charge AS amount								#charge (amount spent) from international sales
+	FROM
+		international_sales i
+	JOIN
+		item_stock st ON st.sku_code = i.sku
+	GROUP BY date, i.customer_name, i.sku, st.category, i.quantity, i.charge;
+    
+WITH combined_sales AS (										#Aggregate by product (sku) and date
+	SELECT
+        category,
+        SUM(qty) AS total_sold,
+        SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END) AS total_revenue
+	FROM
+		t_all_sales
+	GROUP BY
+		category
+	)
+SELECT
+    category,
+	RANK() OVER(ORDER BY total_revenue DESC) AS total_ranking,
+    total_revenue,
+	RANK() OVER(ORDER BY total_sold DESC) AS items_sold_ranking,
+    total_sold
+FROM
+	combined_sales
+ORDER BY
+	total_revenue DESC;
+        
+
     

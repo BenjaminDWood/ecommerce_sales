@@ -85,7 +85,7 @@ MODIFY COLUMN date DATE;
 /* Stored procedure to look up information on a single order, included product information including stock for refund/replacement requirements */
 
 DELIMITER $$
-CREATE PROCEDURE find_order(in p_order_id INTEGER)
+CREATE PROCEDURE find_order(in p_order_id TEXT)
 BEGIN
 		SELECT
 			s.*,
@@ -100,6 +100,8 @@ BEGIN
 					s.order_id = p_order_id;
 END$$
 DELIMITER ;
+
+CALL find_order('402-8210765-3935569');
 
 /* Creation of a stored procedure to provide a brief customer summary using a LIKE name input match, showing the customer name, their total spend,
 their spend this year - which is always 0 as the records don't go back that far -, and the date and sum of their most recent purchase */
@@ -159,9 +161,9 @@ SELECT
 	i.customer_name,
 	ROUND(sum(i.charge), 2) AS total_spend,
     RANK() OVER (ORDER BY SUM(o.yearly_spend) DESC) AS `Rank (2021)`,
-    o.yearly_spend AS `2021_spend`,
+    ROUND(o.yearly_spend, 2) AS `2021_spend`,
 	RANK() OVER (ORDER BY SUM(t.yearly_spend) DESC) `Rank (2022)`,
-    t.yearly_spend AS `2022_spend`
+    ROUND(t.yearly_spend, 2) AS `2022_spend`
 FROM
 	international_sales i
 JOIN
@@ -171,77 +173,25 @@ JOIN
 GROUP BY customer_name
 ORDER BY overall_rank;
 
-/* Below queries show firstly the top ranking products over the time period, then segregated by month to check for seasonal variations. Category has been included here
+/* Below queries show firstly the top ranking products over the time period, then segregated by month to check for seasonal variations. Category has been included
 to help with readability. */
 
-WITH all_sales AS (
+
+CREATE TEMPORARY TABLE t_all_sales # Temporary Table to combine sales from both the sales_report and international_sales
 	SELECT
 		order_id,										#Order ID from sales report
 		date,											#Date from sales report
         NULL AS customer_name,							#Customer name NULL for international sales
         sku,											#sku from sales report
+        category,
         qty,											#qty (quantity) from sales report
         amount											#Amount (spent) from sales report
 	FROM
 		sales_report
 	WHERE
 		status IN ('Shipped', 'Shipped - Delivered to Buyer')
-/* Cancelled items still appear with qty and amount sometimes, but shouldn't be included in revenue figures (Most (>80%) orders fall within one of these categories,
-other orders may still fall through at this point due to cancellations, loss, returns etc., so have been excluded */
-	UNION ALL
-	SELECT
-		NULL AS order_id,								#order id NULL for sales report
-		date,											#Date from international sales
-        customer_name,									#Customer name from international sales
-        sku,											#sku from international sales
-        quantity AS qty,								#quantity as qty from international sales
-        charge AS amount								#charge (amount spent) from international sales
-	FROM
-		international_sales
-	GROUP BY date, customer_name, sku, quantity, charge
-	),
-combined_sales AS (										#Aggregate by product (sku) and date
-	SELECT
-		date,										
-		sku,
-        SUM(qty) AS total_sold,
-        SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END) AS total_revenue
-	FROM
-		all_sales
-	GROUP BY
-		date, sku
-	)
-SELECT
-	sku,
-	RANK() OVER(ORDER BY total_revenue DESC) AS total_ranking,
-    total_revenue,
-	RANK() OVER(ORDER BY total_sold DESC) AS items_sold_ranking,
-    total_sold
-FROM
-	combined_sales
-GROUP BY
-	sku, total_revenue, total_sold
-ORDER BY
-	total_revenue DESC;
-    
-
-#Query 2: Top products by month
-
-WITH all_sales AS (
-	SELECT
-		order_id,										#Order ID from sales report
-		date,											#Date from sales report
-        NULL AS customer_name,							#Customer name NULL for international sales
-        sku,											#sku from sales report
-        category,										#Adding category from sales report
-        qty,											#qty (quantity) from sales report
-        amount											#Amount (spent) from sales report
-	FROM
-		sales_report
-	WHERE
-		status IN ('Shipped', 'Shipped - Delivered to Buyer')
-/* Cancelled items still appear with qty and amount sometimes, but shouldn't be included in revenue figures (Most (>80%) orders fall within one of these categories,
-other orders may still fall through at this point due to cancellations, loss, returns etc., so have been excluded */
+/* Cancelled items still appear with qty and amount sometimes, but shouldn't be included in revenue figures
+(Most (>80%) orders fall within one of these categories, other orders may still fall through at this point due to cancellations, loss, returns etc., so have been excluded */
 	UNION ALL
 	SELECT
 		NULL AS order_id,								#order id NULL for sales report
@@ -255,22 +205,51 @@ other orders may still fall through at this point due to cancellations, loss, re
 		international_sales i
 	JOIN
 		item_stock st ON st.sku_code = i.sku
-	GROUP BY date, i.customer_name, i.sku, st.category, i.quantity, i.charge
-	),
-combined_sales AS (										#Aggregate by product (sku) and date
+	GROUP BY date, i.customer_name, i.sku, st.category, i.quantity, i.charge;
+    
+WITH combined_sales AS (										#Aggregate by product (sku) and date
 	SELECT
 		date,										
 		sku,
         category,
         SUM(qty) AS total_sold,
-        SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END) AS total_revenue
+        ROUND(SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END), 2) AS total_revenue
 	FROM
-		all_sales
+		t_all_sales
 	GROUP BY
 		date, sku, category
 	)
 SELECT
-	date_format(date, '%m-%Y') AS `date`,
+	sku,
+    category,
+	RANK() OVER(ORDER BY total_revenue DESC) AS total_ranking,
+    total_revenue,
+	RANK() OVER(ORDER BY total_sold DESC) AS items_sold_ranking,
+    total_sold
+FROM
+	combined_sales
+GROUP BY
+	sku, category, total_revenue, total_sold
+ORDER BY
+	total_revenue DESC;
+    
+
+#Query 2: Top products by month
+
+WITH combined_sales AS (										#Aggregate by product (sku) and date
+	SELECT
+		date,										
+		sku,
+        category,
+        SUM(qty) AS total_sold,
+        ROUND(SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END), 2) AS total_revenue
+	FROM
+		t_all_sales
+	GROUP BY
+		date, sku, category
+	)
+SELECT
+	date_format(date, '%Y-%m') AS `date`,
 	sku,
     category,
 	RANK() OVER(PARTITION BY YEAR(date), MONTH(date) ORDER BY total_revenue DESC) AS total_ranking,
@@ -283,6 +262,54 @@ GROUP BY
 	`date`, sku, category, total_revenue, total_sold
 ORDER BY
 	`date` DESC, total_revenue DESC;
+    
+#Query 3: Top categories by month
+
+WITH combined_sales AS (										
+	SELECT
+		date_format(date, '%Y-%m') AS `date`,
+        category,
+        SUM(qty) AS total_sold,
+        SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END) AS total_revenue
+	FROM
+		t_all_sales
+	GROUP BY
+		date_format(date, '%Y-%m'), category
+	)
+SELECT
+	date,
+    category,
+	RANK() OVER(PARTITION BY date ORDER BY total_revenue DESC) AS total_ranking,
+    total_revenue,
+	RANK() OVER(PARTITION BY date ORDER BY total_sold DESC) AS items_sold_ranking,
+    total_sold
+FROM
+	combined_sales
+ORDER BY
+	`date` DESC, total_revenue DESC;
+    
+#Query 4: Top categories over the whole time period
+
+WITH combined_sales AS (									
+	SELECT
+        category,
+        SUM(qty) AS total_sold,
+        SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END) AS total_revenue
+	FROM
+		t_all_sales
+	GROUP BY
+		category
+	)
+SELECT
+    category,
+	RANK() OVER(ORDER BY total_revenue DESC) AS total_ranking,
+    total_revenue,
+	RANK() OVER(ORDER BY total_sold DESC) AS items_sold_ranking,
+    total_sold
+FROM
+	combined_sales
+ORDER BY
+	total_revenue DESC;
     
     
 /* Returning revenue by location, excluding 33 results where ship_city is null. Limited the results to 100 as there are over 1000 rows anyway and e.g. the top 10 could be picked
@@ -341,7 +368,8 @@ FROM monthly_revenue
 ORDER BY year, month;
 
 /* Customer Churn table: Checking for repeat customers in international sales and flagging those who haven't placed an order in more than 90 days
-NOTE: The 90 day limit is from the final date in the dataset for testing purposes and would be replaced by DATE(NOW()) in a live dataset */
+NOTE: The 90 day limit is from the final date in the dataset for testing purposes and would be replaced by DATE(NOW()) in a live dataset
+May now add a tiered churn for the below at 60 and 120 days */
 
 with separate_orders as (
 	SELECT
@@ -363,12 +391,16 @@ repeat_customers AS (
 	HAVING	
 		separate_order_count > 1
     )
-#Final table Customer | last order date | time since last order | flag?
 SELECT
 	rc.customer_name,
     MAX(i.date) AS last_order,
     TIMESTAMPDIFF(day, MAX(i.date), '2022-05-11') AS days_since_last_order,
-    CASE WHEN TIMESTAMPDIFF(day, MAX(i.date), '2022-05-11') > 90 THEN 'Yes' ELSE 'No' END AS Flag #Note the date in these queries is the most recent date available in the dataset
+    CASE
+		WHEN TIMESTAMPDIFF(day, MAX(i.date), '2022-05-11') >= 120 THEN 'flag_120'
+		WHEN TIMESTAMPDIFF(day, MAX(i.date), '2022-05-11') >= 90 THEN 'flag_90'
+		WHEN TIMESTAMPDIFF(day, MAX(i.date), '2022-05-11') >= 60 THEN 'flag_60'
+		ELSE 'No'
+        END AS flag #Note the date in these queries is the most recent date available in the dataset
 FROM
 	repeat_customers rc
 INNER JOIN
@@ -378,7 +410,7 @@ GROUP BY
 ORDER BY
 	days_since_last_order DESC;
 
-/* IDEAS: Top customer (by year?) DONE / top selling item(by year? Monthly trends?) (DONE - with caveat want to look at category still) / Total Revenue by month/year etc. / 
+/* IDEAS: Top customer (by year?) DONE / top selling item(by year? Monthly trends?) (DONE - with caveat want to look at category still) / Total Revenue by month/year etc. (DONE)/ 
 Best-selling CATEGORIES / Explore customer orders in general: can we predict churn, look at repeat orders etc. / Use ship city to determine the locations with the most orders! (DONE) */
 
 
