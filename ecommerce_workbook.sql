@@ -394,10 +394,9 @@ MODIFY COLUMN date DATE;
 
 WITH all_sales AS (
 	SELECT
-		order_id,										#Order ID from sales report
 		date,											#Date from sales report
         NULL AS customer_name,							#Customer name NULL for international sales
-        sku,											#sku from sales report
+        category,										#Adding category from sales report
         qty,											#qty (quantity) from sales report
         amount											#Amount (spent) from sales report
 	FROM
@@ -408,30 +407,30 @@ WITH all_sales AS (
 other orders may still fall through at this point due to cancellations, loss, returns etc., so have been excluded */
 	UNION ALL
 	SELECT
-		NULL AS order_id,								#order id NULL for sales report
-		date,											#Date from international sales
-        customer_name,									#Customer name from international sales
-        sku,											#sku from international sales
-        quantity AS qty,								#quantity as qty from international sales
-        charge AS amount								#charge (amount spent) from international sales
+		i.date,											#Date from international sales
+        i.customer_name,								#Customer name from international sales
+        st.category,
+        i.quantity AS qty,								#quantity as qty from international sales
+        i.charge AS amount								#charge (amount spent) from international sales
 	FROM
-		international_sales
-	GROUP BY date, customer_name, sku, quantity, charge
+		international_sales i
+	JOIN
+		item_stock st ON st.sku_code = i.sku
 	),
 combined_sales AS (										#Aggregate by product (sku) and date
 	SELECT
 		date,										
-		sku,
+        category,
         SUM(qty) AS total_sold,
         SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END) AS total_revenue
 	FROM
 		all_sales
 	GROUP BY
-		date, sku
+		date, category
 	)
 SELECT
 	date_format(date, '%m-%Y') AS `date`,
-	sku,
+    category,
 	RANK() OVER(PARTITION BY YEAR(date), MONTH(date) ORDER BY total_revenue DESC) AS total_ranking,
     total_revenue,
 	RANK() OVER(PARTITION BY YEAR(date), MONTH(date) ORDER BY total_sold DESC) AS items_sold_ranking,
@@ -439,9 +438,11 @@ SELECT
 FROM
 	combined_sales
 GROUP BY
-	`date`, sku, total_revenue, total_sold
+	category
 ORDER BY
-	`date` DESC, total_revenue DESC;
+	`date` DESC, total_ranking ASC;
+    
+/* Currently, I want the above to show the top categories, by month i.e. grouped by category */
 
         
 SELECT * FROM international_sales;
@@ -478,4 +479,110 @@ FROM
 	international_sales
 GROUP BY date, customer_name, sku, quantity, charge;
 
-SELECT dae
+# Working on top cities ranked by revenue over the whole time period
+#Fields: Cities grouped, sum of revenue
+
+SELECT
+	ship_city,
+    ship_state,
+    SUM(amount) AS total_revenue
+FROM
+	sales_report
+WHERE
+	status IN ('Shipped', 'Shipped - Delivered to Buyer') AND qty > 0 AND ship_city IS NOT NULL
+GROUP BY
+	ship_city, ship_state
+ORDER BY total_revenue DESC
+LIMIT 100;
+
+SELECT * FROM sales_report WHERE ship_city IS NULL;
+
+
+# Standard revenue report - FIELDS: Month, domestic revenue, international revenue, total revenue
+
+WITH combined_revenue AS (
+	SELECT
+		date,
+        amount,
+        NULL AS charge
+	FROM
+		sales_report
+	WHERE
+		status IN ('Shipped', 'Shipped - Delivered to Buyer') AND qty > 0 
+	UNION ALL
+	SELECT
+		date,
+        NULL AS amount,
+        charge
+	FROM
+		international_sales
+	)
+SELECT
+	YEAR(date) AS year,
+    MONTH(date) AS month,
+    SUM(COALESCE(amount,0)) AS domestic_revenue,
+    SUM(COALESCE(charge,0)) AS international_revenue,
+    SUM(COALESCE(amount,0)) + SUM(COALESCE(charge,0)) AS total_revenue
+FROM
+	combined_revenue
+ORDER BY `date`, total_revenue DESC;
+        
+#CTE Test
+
+	SELECT
+		date,
+        amount,
+        NULL AS charge
+	FROM
+		sales_report
+	WHERE
+		status IN ('Shipped', 'Shipped - Delivered to Buyer') AND qty > 0 
+	UNION ALL
+	SELECT
+		date,
+        NULL AS amount,
+        charge
+	FROM
+		international_sales;
+        
+#New Version
+
+WITH combined_revenue AS (
+    SELECT
+        date,
+        amount,
+        NULL AS charge
+    FROM sales_report
+    WHERE status IN ('Shipped', 'Shipped - Delivered to Buyer') AND qty > 0 
+
+    UNION ALL
+
+    SELECT
+        date,
+        NULL AS amount,
+        charge
+    FROM international_sales
+),
+monthly_revenue AS (
+    SELECT
+        YEAR(date) AS year,
+        MONTH(date) AS month,
+        SUM(COALESCE(amount,0)) AS domestic_revenue,
+        SUM(COALESCE(charge,0)) AS international_revenue,
+        SUM(COALESCE(amount,0)) + SUM(COALESCE(charge,0)) AS total_revenue
+    FROM combined_revenue
+    GROUP BY YEAR(date), MONTH(date)
+)
+SELECT
+    year,
+    month,
+    ROUND(domestic_revenue,2) AS `Domestic Revenue`,
+    ROUND(international_revenue,2) AS `International Revenue`,
+    ROUND(total_revenue,2) AS `Total Revenue`
+FROM monthly_revenue
+ORDER BY year, month;
+
+SELECT DISTINCT MONTH(date) FROM sales_report;
+
+
+	
