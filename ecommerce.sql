@@ -289,6 +289,7 @@ ORDER BY
 later for marketing purposes */
 
 SELECT
+	RANK() OVER (ORDER BY SUM(amount) DESC) AS city_rank,
 	ship_city,
     ship_state,
     SUM(amount) AS total_revenue
@@ -338,6 +339,44 @@ SELECT
     ROUND(total_revenue,2) AS `Total Revenue`
 FROM monthly_revenue
 ORDER BY year, month;
+
+/* Customer Churn table: Checking for repeat customers in international sales and flagging those who haven't placed an order in more than 90 days
+NOTE: The 90 day limit is from the final date in the dataset for testing purposes and would be replaced by DATE(NOW()) in a live dataset */
+
+with separate_orders as (
+	SELECT
+		date,
+		customer_name
+	FROM
+		international_sales
+	GROUP BY
+		date, customer_name
+    ),
+repeat_customers AS (
+	SELECT
+		customer_name,
+		COUNT(customer_name) AS separate_order_count
+	FROM
+		separate_orders
+	GROUP BY
+		customer_name
+	HAVING	
+		separate_order_count > 1
+    )
+#Final table Customer | last order date | time since last order | flag?
+SELECT
+	rc.customer_name,
+    MAX(i.date) AS last_order,
+    TIMESTAMPDIFF(day, MAX(i.date), '2022-05-11') AS days_since_last_order,
+    CASE WHEN TIMESTAMPDIFF(day, MAX(i.date), '2022-05-11') > 90 THEN 'Yes' ELSE 'No' END AS Flag #Note the date in these queries is the most recent date available in the dataset
+FROM
+	repeat_customers rc
+INNER JOIN
+	international_sales i ON i.customer_name = rc.customer_name
+GROUP BY
+	customer_name
+ORDER BY
+	days_since_last_order DESC;
 
 /* IDEAS: Top customer (by year?) DONE / top selling item(by year? Monthly trends?) (DONE - with caveat want to look at category still) / Total Revenue by month/year etc. / 
 Best-selling CATEGORIES / Explore customer orders in general: can we predict churn, look at repeat orders etc. / Use ship city to determine the locations with the most orders! (DONE) */

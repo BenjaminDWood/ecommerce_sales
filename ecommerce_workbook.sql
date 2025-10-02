@@ -483,6 +483,7 @@ GROUP BY date, customer_name, sku, quantity, charge;
 #Fields: Cities grouped, sum of revenue
 
 SELECT
+	RANK() OVER (ORDER BY SUM(amount) DESC) AS city_rank,
 	ship_city,
     ship_state,
     SUM(amount) AS total_revenue
@@ -585,4 +586,74 @@ ORDER BY year, month;
 SELECT DISTINCT MONTH(date) FROM sales_report;
 
 
-	
+# Checking for churn
+# So... create a table of repeat customers, where orders, grouped by date, are greater than one
+
+with separate_orders as (
+	SELECT
+		date,
+		customer_name
+	FROM
+		international_sales
+	GROUP BY
+		date, customer_name
+    ),
+repeat_customers AS (
+	SELECT
+		customer_name,
+		COUNT(customer_name) AS separate_order_count
+	FROM
+		separate_orders
+	GROUP BY
+		customer_name
+	HAVING	
+		separate_order_count > 1
+    )
+#Final table Customer | last order date | time since last order | flag?
+SELECT
+	rc.customer_name,
+    MAX(i.date) AS last_order,
+    TIMESTAMPDIFF(day, MAX(i.date), '2022-05-11') AS days_since_last_order,
+    CASE WHEN TIMESTAMPDIFF(day, MAX(i.date), '2022-05-11') > 90 THEN 'Yes' ELSE 'No' END AS Flag
+FROM
+	repeat_customers rc
+INNER JOIN
+	international_sales i ON i.customer_name = rc.customer_name
+GROUP BY
+	customer_name
+ORDER BY
+	days_since_last_order DESC;
+
+
+
+#CTE Test
+
+WITH separate_orders as ( #This CTE works and does what it's supposed to
+	SELECT
+		date,
+		customer_name
+	FROM
+		international_sales
+	GROUP BY
+		date, customer_name
+    )
+SELECT
+	customer_name,
+	COUNT(customer_name) AS separate_order_count
+FROM
+	separate_orders
+GROUP BY
+	customer_name
+HAVING	
+	separate_order_count > 1
+ORDER BY
+	separate_order_count DESC; # This does what it's supposed to but can delete the ORDER BY
+    
+SELECT
+	max(date)
+FROM
+	international_sales;
+    
+SELECT date(now());
+    
+    
