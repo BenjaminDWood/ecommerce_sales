@@ -392,17 +392,14 @@ ORDER BY sku DESC;
 ALTER TABLE sales_report
 MODIFY COLUMN date DATE;
 
-#Working on the final version for top products - TOP PRODUCTS VERSION 1/10/25 - LEAVING FOR NOW AS I VALUE MY SANITY! MOST RECENT VERSION HERE
-# LOOK I PUT IT IN ALL CAPS SO IT'S EASY TO SEEEEEEE!
-
 WITH all_sales AS (
 	SELECT
-		order_id,
-		date,
-        NULL AS customer_name,
-        sku,
-        qty,
-        amount
+		order_id,										#Order ID from sales report
+		date,											#Date from sales report
+        NULL AS customer_name,							#Customer name NULL for international sales
+        sku,											#sku from sales report
+        qty,											#qty (quantity) from sales report
+        amount											#Amount (spent) from sales report
 	FROM
 		sales_report
 	WHERE
@@ -411,50 +408,49 @@ WITH all_sales AS (
 other orders may still fall through at this point due to cancellations, loss, returns etc., so have been excluded */
 	UNION ALL
 	SELECT
-		NULL AS order_id,
-		date,
-        customer_name,
-        sku,
-        quantity AS qty,
-        charge AS amount
+		NULL AS order_id,								#order id NULL for sales report
+		date,											#Date from international sales
+        customer_name,									#Customer name from international sales
+        sku,											#sku from international sales
+        quantity AS qty,								#quantity as qty from international sales
+        charge AS amount								#charge (amount spent) from international sales
 	FROM
 		international_sales
 	GROUP BY date, customer_name, sku, quantity, charge
 	),
-combined_sales AS (
+combined_sales AS (										#Aggregate by product (sku) and date
 	SELECT
-		MAX(date),
+		date,										
 		sku,
         SUM(qty) AS total_sold,
         SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END) AS total_revenue
 	FROM
 		all_sales
 	GROUP BY
-		sku
+		date, sku
 	)
 SELECT
-	a.sku,
-	RANK() OVER(PARTITION BY c.total_revenue ORDER BY c.total_revenue DESC) AS total_ranking,
-    c.total_revenue,
-	RANK() OVER(PARTITION BY c.total_sold ORDER BY c.total_sold DESC) AS items_sold_ranking,
-    c.total_sold
+	date_format(date, '%m-%Y') AS `date`,
+	sku,
+	RANK() OVER(PARTITION BY YEAR(date), MONTH(date) ORDER BY total_revenue DESC) AS total_ranking,
+    total_revenue,
+	RANK() OVER(PARTITION BY YEAR(date), MONTH(date) ORDER BY total_sold DESC) AS items_sold_ranking,
+    total_sold
 FROM
-	all_sales a
-JOIN
-	combined_sales c ON a.sku = c.sku
+	combined_sales
 GROUP BY
-	a.sku
+	`date`, sku, total_revenue, total_sold
 ORDER BY
-	total_ranking;
+	`date` DESC, total_revenue DESC;
 
-#Top selling items - The sku code - any kind of name for the item, number sold, total spent on it and rank, avg spent on it - what is meant by this? 
-#                                                       Category?
         
 SELECT * FROM international_sales;
 
 SELECT * FROM international_sales WHERE quantity IS NOT NULL;
 	 
 SELECT * FROM sales_report 	WHERE status IN ('Shipped', 'Shipped - Delivered to Buyer') AND qty = 0;
+
+SELECT * FROM sales_report WHERE sku = 'JNE3797-KR-XL' AND status IN ('Shipped', 'Shipped - Delivered to Buyer');
 
 
 #Testing CTEs - they work fine

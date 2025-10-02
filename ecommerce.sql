@@ -168,6 +168,57 @@ JOIN
 GROUP BY customer_name
 ORDER BY overall_rank;
 
+/* Below queries show firstly the top ranking products over the time period, then segregated by month to check for seasonal variations */
+
+WITH all_sales AS (
+	SELECT
+		order_id,										#Order ID from sales report
+		date,											#Date from sales report
+        NULL AS customer_name,							#Customer name NULL for international sales
+        sku,											#sku from sales report
+        qty,											#qty (quantity) from sales report
+        amount											#Amount (spent) from sales report
+	FROM
+		sales_report
+	WHERE
+		status IN ('Shipped', 'Shipped - Delivered to Buyer')
+/* Cancelled items still appear with qty and amount sometimes, but shouldn't be included in revenue figures (Most (>80%) orders fall within one of these categories,
+other orders may still fall through at this point due to cancellations, loss, returns etc., so have been excluded */
+	UNION ALL
+	SELECT
+		NULL AS order_id,								#order id NULL for sales report
+		date,											#Date from international sales
+        customer_name,									#Customer name from international sales
+        sku,											#sku from international sales
+        quantity AS qty,								#quantity as qty from international sales
+        charge AS amount								#charge (amount spent) from international sales
+	FROM
+		international_sales
+	GROUP BY date, customer_name, sku, quantity, charge
+	),
+combined_sales AS (										#Aggregate by product (sku) and date
+	SELECT
+		date,										
+		sku,
+        SUM(qty) AS total_sold,
+        SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END) AS total_revenue
+	FROM
+		all_sales
+	GROUP BY
+		date, sku
+	)
+SELECT
+	sku,
+	RANK() OVER(ORDER BY total_revenue DESC) AS total_ranking,
+    total_revenue,
+	RANK() OVER(ORDER BY total_sold DESC) AS items_sold_ranking,
+    total_sold
+FROM
+	combined_sales
+GROUP BY
+	sku, total_revenue, total_sold
+ORDER BY
+	total_revenue DESC;
 
 /* IDEAS: Top customer (by year?) DONE / top selling item(by year? Monthly trends?) / Total Revenue by month/year etc. / 
 Best-selling CATEGORIES / Explore customer orders in general: can we predict churn, look at repeat orders etc. / Use ship city to determine the locations with the most orders! */
