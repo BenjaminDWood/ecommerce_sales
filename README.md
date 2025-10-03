@@ -1,6 +1,6 @@
 ## Read Me
 
-Original dataset can be viewed here: https://www.kaggle.com/datasets/thedevastator/unlock-profits-with-e-commerce-sales-data
+Original dataset can be viewed [here](https://www.kaggle.com/datasets/thedevastator/unlock-profits-with-e-commerce-sales-data)
 
 ### Project
 
