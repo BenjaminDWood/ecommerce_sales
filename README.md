@@ -29,4 +29,4 @@ ecommerce.sql: A tidied format of the queries I wanted to achieve. Table of cont
 7. Query: Revenue Report (Domestic + International, Monthly)
 8. Query: Customer Churn Report
 
-Visualisation of selected data can be viewed on my Tableau profile.
+Visualisation of selected data can be viewed on my [Tableau profile](https://public.tableau.com/app/profile/benjamin.wood8808/viz/EcommerceVisualisation/CustomersDashboard?publish=yes).
