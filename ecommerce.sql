@@ -410,8 +410,5 @@ GROUP BY
 ORDER BY
 	days_since_last_order DESC;
 
-/* IDEAS: Top customer (by year?) DONE / top selling item(by year? Monthly trends?) (DONE - with caveat want to look at category still) / Total Revenue by month/year etc. (DONE)/ 
-Best-selling CATEGORIES / Explore customer orders in general: can we predict churn, look at repeat orders etc. / Use ship city to determine the locations with the most orders! (DONE) */
-
 
  
