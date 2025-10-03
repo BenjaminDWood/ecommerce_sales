@@ -35,6 +35,10 @@ SELECT
 FROM
     sales_report;
     
+SELECT min(date) from sales_report;
+
+SELECT max(date) from sales_report;
+    
 drop table if exists item_stock;
     
 CREATE TABLE `ecommerce`.`item_stock` (

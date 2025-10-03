@@ -240,7 +240,7 @@ WITH combined_sales AS (										#Aggregate by product (sku) and date
 	SELECT
 		date,										
 		sku,
-        category,
+        TRIM(LOWER(category)) AS category,
         SUM(qty) AS total_sold,
         ROUND(SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END), 2) AS total_revenue
 	FROM
@@ -268,7 +268,7 @@ ORDER BY
 WITH combined_sales AS (										
 	SELECT
 		date_format(date, '%Y-%m') AS `date`,
-        category,
+        TRIM(lower(category)) AS category,
         SUM(qty) AS total_sold,
         SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END) AS total_revenue
 	FROM
@@ -292,7 +292,7 @@ ORDER BY
 
 WITH combined_sales AS (									
 	SELECT
-        category,
+        TRIM(LOWER(category)) AS category,
         SUM(qty) AS total_sold,
         SUM(CASE WHEN qty > 0 THEN amount ELSE 0 END) AS total_revenue
 	FROM
