@@ -1,6 +1,7 @@
 # Other files/folders
 *.csv
 *.docx
+*.twb
 exports/
 
 # Byte-compiled / optimized / DLL files
