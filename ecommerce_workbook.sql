@@ -4,7 +4,7 @@ use ecommerce;
 
 drop table if exists sales_report;
 
-CREATE TABLE `sales_report` (
+CREATE TABLE IF NOT EXISTS `sales_report` (
   `index` bigint DEFAULT NULL,
   `order_id` text,
   `date` datetime DEFAULT NULL,
@@ -41,7 +41,7 @@ SELECT max(date) from sales_report;
     
 drop table if exists item_stock;
     
-CREATE TABLE `ecommerce`.`item_stock` (
+CREATE TABLE IF NOT EXISTS `ecommerce`.`item_stock` (
   `index` INT NOT NULL,
   `sku_code` VARCHAR(45) NULL,
   `design_no` VARCHAR(45) NULL,
@@ -208,9 +208,9 @@ GROUP BY customer_name;
 # Nicely working version
 SELECT
     i.customer_name,
-    SUM(i.charge) AS total_spend,
+    ROUND(SUM(i.charge),2) AS total_spend,
     SUM(CASE WHEN YEAR(i.date) = YEAR(CURDATE()) THEN round(i.charge, 2) ELSE 0 END) AS spend_this_year,
-	MAX(CASE WHEN date = NULL THEN 'No Purchase History' ELSE i.date END) AS most_recent_purchase_date,
+	MAX(CASE WHEN date IS NULL THEN 'No Purchase History' ELSE i.date END) AS most_recent_purchase_date,
     SUM(CASE WHEN i.date = r.max_date THEN ROUND(i.charge, 2) ELSE 0 END) AS most_recent_spend
 FROM international_sales i
 JOIN (
@@ -218,7 +218,7 @@ JOIN (
     FROM international_sales
     GROUP BY customer_name
 ) r ON i.customer_name = r.customer_name
-WHERE i.customer_name LIKE '%AMANI%'
+WHERE i.customer_name LIKE '%BOB%'
 GROUP BY i.customer_name;
 
 
@@ -232,7 +232,7 @@ BEGIN
     i.customer_name,
 		ROUND(SUM(i.charge), 2) AS total_spend,
 		SUM(CASE WHEN YEAR(i.date) = YEAR(CURDATE()) THEN ROUND(i.charge, 2) ELSE 0 END) AS spend_this_year,
-		MAX(CASE WHEN date = NULL THEN 'No Purchase History' ELSE i.date END) AS most_recent_purchase_date,
+		MAX(CASE WHEN date IS NULL THEN 'No Purchase History' ELSE i.date END) AS most_recent_purchase_date,
 		SUM(CASE WHEN i.date = r.max_date THEN ROUND(i.charge, 2) ELSE 0 END) AS most_recent_spend
 	FROM international_sales i
 	JOIN (

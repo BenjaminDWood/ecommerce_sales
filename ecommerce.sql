@@ -174,7 +174,7 @@ GROUP BY customer_name
 ORDER BY overall_rank;
 
 /* Below queries show firstly the top ranking products over the time period, then segregated by month to check for seasonal variations. Category has been included
-to help with readability. */
+to help with interpretation. */
 
 
 CREATE TEMPORARY TABLE t_all_sales # Temporary Table to combine sales from both the sales_report and international_sales
@@ -191,7 +191,7 @@ CREATE TEMPORARY TABLE t_all_sales # Temporary Table to combine sales from both 
 	WHERE
 		status IN ('Shipped', 'Shipped - Delivered to Buyer')
 /* Cancelled items still appear with qty and amount sometimes, but shouldn't be included in revenue figures
-(Most (>80%) orders fall within one of these categories, other orders may still fall through at this point due to cancellations, loss, returns etc., so have been excluded */
+(Most (>80%) orders fall within one of these categories, orders with other statuses either have been cancelled or may still be cancelled/returned at this point, so have been excluded */
 	UNION ALL
 	SELECT
 		NULL AS order_id,								#order id NULL for sales report
@@ -403,7 +403,7 @@ SELECT
         END AS flag #Note the date in these queries is the most recent date available in the dataset
 FROM
 	repeat_customers rc
-INNER JOIN
+JOIN
 	international_sales i ON i.customer_name = rc.customer_name
 GROUP BY
 	customer_name
